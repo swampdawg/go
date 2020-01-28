@@ -1,4 +1,4 @@
 # go
 Source code build wrapper
 
-testing
+Bash helper scripts to ease building from source. Main script 'go' to follow.
