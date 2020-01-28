@@ -45,7 +45,7 @@
     F_VAR_OSVERSION=
 
     #default mail recipient
-    F_VAR_MAIL_RCPT="unix.alerts@nottscc.gov.uk"
+    F_VAR_MAIL_RCPT="root@localhost"
 ###############################################################################
 
 # scan etc/filesystems for arg /mountpoint then for a match extract the
