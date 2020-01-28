@@ -1,0 +1,181 @@
+#~~~Licence
+[ -z "$F_VAR" ] && {
+    F_VAR="f_var"
+###############################################################################
+.   "$SUB/f_tmp"
+
+    #standard return codes
+    F_VAR_OKI=0
+    F_VAR_ERR=1
+    #used by us when we need to bailout
+    F_VAR_BAD=99
+
+    #f_exit handles these
+    F_VAR_EXIT="0"
+    #f_trap handles these
+    F_VAR_TRAP="1 2 3 15"
+
+    #full path to our lockfile, if it exists.
+    F_VAR_LCK_DIR="/var/"$(basename `dirname "$SUB"`)"/lck"
+
+    #base data folder
+    F_VAR_DAT="/var/"$(basename `dirname "$SUB"`)"/dat/$NAM"
+
+##?do we need this any more?
+    #rundata (time pid)
+    F_VAR_DAT_RUN="/var/"$(basename `dirname "$SUB"`)"/run"
+    #default for stopping runs
+    F_VAR_DAT_RUNLIMIT="5"
+##^^^
+
+    #name of cdrom in etc/filesystems
+    F_VAR_CDROM="/cdrom"
+    #these get set once only
+    F_VAR_CDROM_DEV=
+    F_VAR_CDROM_MNT=
+
+    #name of dvdram in etc/filesystems
+    F_VAR_DVDRAM="/dvdram"
+    #these get set once only
+    F_VAR_DVDRAM_DEV=
+    F_VAR_DVDRAM_MNT=
+
+    F_VAR_SYSTEM=
+    F_VAR_HOSTNAME=
+    F_VAR_OSVERSION=
+
+    #default mail recipient
+    F_VAR_MAIL_RCPT="unix.alerts@nottscc.gov.uk"
+###############################################################################
+
+# scan etc/filesystems for arg /mountpoint then for a match extract the
+# device field & echo /device /mountpoint.
+# echo nul for no match.
+f_var_etcfilesystems ()
+{
+ f_tmp_add
+ grep -p "^$1:$" "/etc/filesystems" > `f_tmp_top`
+ grep "[[:blank:]]dev[[:blank:]]\{1,\}=[[:blank:]]" `f_tmp_top` | \
+    sed -e \
+    "s!^[[:blank:]]\{1,\}dev[[:blank:]]\{1,\}=[[:blank:]]\{1,\}!$1 !" | \
+    awk '{print $2,$1}'
+ f_tmp_rem
+}
+
+# echo filename of our default datafile, if it exists
+f_var_dat ()
+{
+ echo "$F_VAR_DAT"
+}
+
+# echo /device for $F_VAR_CDROM or nul.
+f_var_cdrom_dev ()
+{
+ [ -z "$F_VAR_CDROM_DEV" ] && {
+    F_VAR_CDROM_DEV=$( \
+        f_var_etcfilesystems "$F_VAR_CDROM" | \
+        awk '{print $1}' \
+    )
+ }
+ echo "$F_VAR_CDROM_DEV"
+}
+
+# echo /mountpoint for $F_VAR_CDROM or nul.
+f_var_cdrom_mnt ()
+{
+ [ -z "$F_VAR_CDROM_MNT" ] && {
+    F_VAR_CDROM_MNT=$( \
+        f_var_etcfilesystems "$F_VAR_CDROM" | \
+        awk '{print $2}' \
+    )
+ }
+ echo "$F_VAR_CDROM_MNT"
+}
+
+# echo /device for $F_VAR_DVDRAM or nul.
+f_var_dvdram_dev ()
+{
+ [ -z "$F_VAR_DVDRAM_DEV" ] && {
+    F_VAR_DVDRAM_DEV=$( \
+        f_var_etcfilesystems "$F_VAR_DVDRAM" | \
+        awk '{print $1}' \
+    )
+ }
+ echo "$F_VAR_DVDRAM_DEV"
+}
+
+# echo /mountpoint for $F_VAR_DVDRAM or nul.
+f_var_dvdram_mnt ()
+{
+ [ -z "$F_VAR_DVDRAM_MNT" ] && {
+    F_VAR_DVDRAM_MNT=$( \
+        f_var_etcfilesystems "$F_VAR_DVDRAM" | \
+        awk '{print $2}' \
+    )
+ }
+ echo "$F_VAR_DVDRAM_MNT"
+}
+
+# echo uncomplicated system name "AIX" for example
+f_var_system ()
+{
+ [ -z "$F_VAR_SYSTEM" ] || return
+
+ case `uname -s` in
+    CYGWIN*)
+    F_VAR_SYSTEM="CYGWIN"
+    ;;
+
+    AIX*)
+    F_VAR_SYSTEM="AIX"
+    ;;
+
+    *)
+    echo "$F_VAR: unknown system ("`uname -s`")" 1>&2
+    exit $F_VAR_BAD
+    ;;
+ esac
+ echo "$F_VAR_SYSTEM"
+}
+
+# echo this machine's hostname
+f_var_hostname ()
+{
+ [ -z "$F_VAR_HOSTNAME" ] || return
+
+ F_VAR_HOSTNAME=`hostname`
+ echo "$F_VAR_HOSTNAME"
+}
+
+# massage this machine's OS version number into a major.minor.release format
+f_var_osversion ()
+{
+ [ -z "$F_VAR_OSVERSION" ] || return
+
+ f_var_system >/dev/null
+ case "$F_VAR_SYSTEM" in
+    CYGWIN)
+    F_VAR_OSVERSION=`uname -r | sed -e 's/(.*)//'`
+    ;;
+
+    AIX)
+    F_VAR_OSVERSION=$( \
+        oslevel -r | sed -e 's/[[:digit:]]\{2\}/&./' | sed -e 's/-/./' \
+    )
+    ;;
+
+    *)
+    echo "$F_VAR: internal error - ?f_var_system?" 1>&2
+    exit $F_VAR_BAD
+    ;;
+ esac
+ echo "$F_VAR_OSVERSION"
+}
+
+f_var_mail_rcpt ()
+{
+ echo "$F_VAR_MAIL_RCPT"
+}
+###############################################################################
+}
+###############################################################################

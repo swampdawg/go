@@ -1,0 +1,51 @@
+##~~~Licence
+[ -z "$F_TRAP" ] && {
+    F_TRAP="f_trap"
+###############################################################################
+.   "$SUB/f_var"
+.   "$SUB/f_tmp"
+###############################################################################
+F_TRAP_RETV=$F_VAR_BAD
+###############################################################################
+# our exit routine. called both on normal & signal exits.
+# ensure all tempfiles get removed, we cheat a bit by accessing the F_TMP_STK
+# internal variable but we're inside the lib. nevertheless this isn't really
+# recommended without justification.
+# ditto F_TMPDIR_STK.
+f_exit ()
+{
+ while ! [ -z "$F_TMP_STK" ]
+ do
+    f_tmp_rem
+ done
+
+ while ! [ -z "$F_TMPDIR_STK" ]
+ do
+    f_tmpdir_rem
+ done
+
+ [ -z "$F_VAR_LCK" ] || {
+    rm -f "$F_VAR_LCK/$NAM" || {
+        echo "$F_TRAP: \"$F_VAR_LCK/$NAM\" - failed to remove" 1>&2
+        echo "$F_TRAP: Remove manually or this will not start again" 1>&2
+    }
+ }
+}
+
+# our signal handler.
+# doesn't need to do anything but emit a message - so user knows it happened.
+f_trap ()
+{
+ echo "*** signal ***" 1>&2
+}
+
+# if caller needs to override these then they are advised to have their
+# respective handlers invoke f_exit & f_trap accordingly (or at very least
+# dupicate their functionality).
+trap 'f_exit'       0
+trap 'F_TRAP_RETV=$?;f_trap;exit $F_TRAP_RETV'  1 2 3 15
+# ~~~note: dont use F_VAR_EXIT/F_VAR_TRAP here as it seems to break the
+# handling stack.
+###############################################################################
+}
+###############################################################################
