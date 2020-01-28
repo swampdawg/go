@@ -1,0 +1,100 @@
+#~~~Licence
+[ -z "$F_TMP" ] && {
+    F_TMP="f_tmp"
+###############################################################################
+.   "$SUB/f_var"
+.   "$SUB/f_trap"
+
+    F_TMP_STK=
+    F_TMP_DIR=
+    F_TMP_ITM=
+###############################################################################
+# if TMP exists then honour it else assume /tmp
+[ -z "$TMP" ] && {
+    F_TMP_DIR="/tmp"
+} || {
+    F_TMP_DIR="$TMP"
+}
+# ensure tempdir exists
+[ -d "$F_TMP_DIR" ] || {
+    mkdir -p "$F_TMP_DIR" || {
+        echo "$F_TMP: mkdir \"$F_TMP_DIR\" failed" 1>&2
+        exit $F_VAR_BAD
+    }
+}
+
+# add a new tempname to the stack and create that file read/write owner only
+# bailout on failure
+f_tmp_add ()
+{
+ F_TMP_ITM="$F_TMP_DIR/$NAM.$$.$RANDOM"
+ [ -f "$F_TMP_ITM" ] && {
+    echo "$F_TMP: \"$F_TMP_ITM\" - already exists" 1>&2
+    exit $F_VAR_BAD
+ }
+ (touch "$F_TMP_ITM" && chmod 600 "$F_TMP_ITM") || {
+    echo "$F_TMP: \"$F_TMP_ITM\" - failed to create" 1>&2
+    exit $F_VAR_BAD
+ }
+ F_TMP_STK="$F_TMP_ITM $F_TMP_STK"
+}
+
+# echo filename on top of stack.
+# this filename exists already and is initially zero length.
+f_tmp_top ()
+{
+ [ -z "$F_TMP_STK" ] && {
+    echo "$F_TMP: nothing on stack" 1>&2
+    exit $F_VAR_BAD
+ }
+ echo "$F_TMP_STK" | sed -e 's/[[:blank:]].*$//'
+}
+
+# pop the filename on the top of the stack, also remove that file.
+# bailout if file cannot be removed as it indicates a fundamental logic
+# error within caller's script.
+f_tmp_rem ()
+{
+ F_TMP_ITM=`f_tmp_top`
+ [ -z "$F_TMP_ITM" ] && {
+    echo "$F_TMP: cannot pop empty stack" 1>&2
+    exit $F_VAR_BAD
+ }
+
+ rm "$F_TMP_ITM" || {
+    echo "$F_TMP: \"$F_TMP_ITM\" - cannot remove" 1>&2
+    exit $F_VAR_BAD
+ }
+ F_TMP_STK=$( \
+    echo "$F_TMP_STK" | \
+    sed -e 's/[[:graph:]]\{1,\}[[:blank:]]\{1,\}//' \
+ )
+}
+
+# pop the filename off the top of the stack but do not remove that file. this
+# is intended for situations where the caller maintains the name.
+f_tmp_pop ()
+{
+ F_TMP_ITM=`f_tmp_top`
+ [ -z "$F_TMP_ITM" ] && {
+    echo "$F_TMP: cannot pop empty stack" 1>&2
+    exit $F_VAR_BAD
+ }
+
+ F_TMP_STK=$( \
+    echo "$F_TMP_STK" | \
+    sed -e 's/[[:graph:]]\{1,\}[[:blank:]]\{1,\}//' \
+ )
+}
+
+# add the filename to the top of the stack but do nothing else. this is
+# intended for situations where the caller wants f_tmp to automatically
+# delete a file which either the caller has created or for which the caller
+# has previously invoked f_tmp_pop.
+f_tmp_pus ()
+{
+ F_TMP_STK="$1 $F_TMP_STK"
+}
+###############################################################################
+}
+###############################################################################

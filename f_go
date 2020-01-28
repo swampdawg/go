@@ -1,0 +1,609 @@
+#~~~Licence
+[ -z "$F_GO" ] && {
+	F_GO="f_go"
+###############################################################################
+.	"$SUB/f_var"
+.	"$SUB/f_trap"
+.	"$SUB/f_tmp"
+###############################################################################
+# This file requires 'bash' rather than 'sh'
+###############################################################################
+F_GO_TIME_B=0
+F_GO_TIME_E=0
+: ${F_GO_INS_ACTION:="install"}
+###############################################################################
+f_go_wrn ()
+{
+ local  r=$(eval echo "$""$1")
+
+ [ -z "$r" ] && {
+        echo "$NAM: \"$1\" not set!" 1>&2
+        return 1 
+ }
+
+ return 0
+}
+
+f_go_err ()
+{
+ local  r=$(eval echo "$""$1")
+
+ [ -z "$r" ] && {
+        echo "$NAM: \"$1\" not set!" 1>&2
+        exit 1
+ }
+ 
+ return 0
+}
+###############################################################################
+f_go_CWD ()
+{
+ CWD=`pwd`
+}
+
+# set the INS variable (eg: /usr/local/GCC)..
+f_go_INS ()
+{
+ [ $# -lt 1 ] && {
+	echo "$NAM: f_go_INS: \$PKG" 1>&2
+	exit 1
+ }
+ : ${INS:="/usr/local/"`awk '{print toupper($0)}' <<< "$1"`}
+}
+
+# set the SRC variable (eg: gcc-8.2.0)..
+#~~~ [ $# -lt 2 ] here?
+f_go_SRC ()
+{
+ : ${SRC:="$1"-"$2"}
+ [ -z "$SRC" ] && {
+	echo "*** warning - \$SRC is not set!" 1>&2
+	echo "*** (using $1-$2)" 1>&2
+ }
+}
+
+# set the PFX variable (eg: /usr/local/GCC/8.2.0)..
+f_go_PFX ()
+{
+ [ $# -lt 3 ] && {
+	echo "$NAM: f_go_PFX: \$INS \$SRC \$PKG" 1>&2
+	exit 1
+ }
+ : ${PFX:=$(echo "$1""/"`echo "$2" | sed -e "s/$3-//"`)}
+}
+
+#~~~incomplete
+f_go_GEN ()
+{
+ : ${GEN:="$SRC"}
+}
+
+# set the OBJ variable (eg: obj-gcc-8.2.0)
+f_go_OBJ ()
+{
+ [ $# -lt 1 ] && {
+	echo "$NAM: f_go_OBJ: \$OBJ" 1>&2
+	exit 1
+ }
+ : ${OBJ:="obj-""$1"}
+}
+###############################################################################
+f_go_lwr ()
+{
+ echo "$1" | awk '{print tolower($0);}'
+}
+
+f_go_upr ()
+{
+ echo "$1" | awk '{print toupper($0);}'
+}
+
+f_go_req_ver ()
+{
+ egrep "^""$1" "$CWD""/""$SRC"".req" | awk -F'-' '{print $NF}'
+}
+
+# number of cores..
+f_go_nproc ()
+{
+ cat /proc/cpuinfo | egrep "^processor" | wc -l
+}
+
+# reasonable number of build cores..
+#f_go_bproc ()
+#{
+# bc -v >/dev/null 2>&1
+# [ $? -eq 0 ] || {
+#	echo "$NAM: f_go_bproc: 'bc' is not installed!" 1>&2
+#	kill -s SIGQUIT $$
+# }
+# echo `f_go_nproc`" / 2 + 1" | bc
+#}
+f_go_bproc ()
+{
+ echo $((`f_go_nproc` -1))
+}
+
+# fudge (written in seconds!)..
+f_go_os ()
+{
+ case `uname -s` in
+	Linux)
+	[ -f /etc/redhat-release ] && {
+		cat /etc/redhat-release | awk '{print $1}'
+		return 0
+	}
+	[ -f /etc/os-release ] && {
+		cat /etc/os-release | egrep "^ID=" | awk -F '=' '{print $NF}'
+		return 0
+	}
+	return $F_VAR_ERR
+	;;
+
+	*)
+	uname -o
+	;;
+ esac
+}
+
+f_go_os_ver ()
+{
+ case `uname -s` in
+	Linux)
+	[ -f /etc/redhat-release ] && {
+		cat /etc/redhat-release | \
+		sed -nre 's/^[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/p'
+		return 0
+	}
+	[ -f /etc/os-release ] && {
+		cat /etc/os-release | \
+		egrep "^VERSION_ID=" | awk -F '=' '{print $NF}' | \
+		sed -nre 's/^[^0-9]*(([0-9]+\.)*[0-9]+).*/\1/p'
+		return 0
+	}
+	return $F_VAR_ERR
+	;;
+
+	CYGWIN*)
+	uname -r | sed -e 's/(.*//'
+	;;
+
+	*)
+	return $F_VAR_ERR
+	;;
+ esac
+}
+
+f_go_syscc_cfg ()
+{
+ local i
+
+ gcc -v 2>&1 | \
+ egrep "Configured[[:space:]]{1,}with:" | \
+ sed -e 's/--/\n--/g' | \
+ egrep -v "Configured[[:space:]]{1,}with:"
+}
+
+# initialise defaults and variables which are not already defined..
+f_go_init ()
+{
+ [ -z "$PKG" ] && {
+	echo "$NAM: f_go_init: PKG is not defined (eg: gcc)" 1>&2
+	exit $F_VAR_ERR
+ }
+ [ -z "$VER" ] && {
+	echo "$NAM: f_go_init: VER is not defined (eg: 8.2.0)" 1>&2
+	exit $F_VAR_ERR
+ }
+
+ f_go_CWD
+ f_go_INS "$PKG"
+ f_go_SRC "$PKG" "$VER"
+ f_go_PFX "$INS" "$SRC" "$PKG"
+ f_go_GEN
+ f_go_OBJ "$SRC"
+
+ mkdir -p \
+ "log/cfg" \
+ "log/mak" \
+ "log/ins" \
+ "log/tst" || exit $F_VAR_ERR
+}
+
+# figure out tarball from newest compression type backward..
+f_go_arc_d ()
+{
+ local	e x
+
+ if [ -f "$1"".tar.xz" ];	then e=".tar.xz";	x="J"
+ elif [ -f "$1"".tar.bz2" ];	then e=".tar.bz2";	x="j"
+ elif [ -f "$1"".tar.gz" ];	then e=".tar.gz";	x="z"
+ elif [ -f "$1"".tar" ];	then e=".tar";		x=""
+ fi
+
+ tar xv"$x"f "$1""$e" || exit $F_VAR_ERR
+}
+
+# unpack tarball or make one from SRC..
+f_go_arc ()
+{
+ case "$1" in
+	-d)
+	f_go_arc_d "$2"
+	;;
+
+	-z)
+	local	f="$2"".tar.xz"
+	[ -f "$f" ] && {
+		echo "$NAM: f_go_arc: tarball $f exists!" 1>&2
+		exit 1
+	}
+	tar cvJf "$f" "$2""/" || exit $F_VAR_ERR
+	;;
+
+	*)
+	echo "$NAM: f_go_arc [-d|-z] \$SRC" 1>&2
+	exit $F_VAR_ERR
+	;;
+ esac
+}
+
+f_go_gen ()
+{
+ local	amARGS
+
+ [ -f "$SRC/missing" ] || amARGS="--add-missing"
+ ( \
+ cd "$GEN" && \
+ aclocal && \
+ autoheader && \
+ automake $amARGS && \
+ autoconf \
+ ) || exit $F_VAR_ERR
+}
+
+# configure SRC for build in OBJ..
+f_go_cfg ()
+{
+ local	pfx
+
+ [ -z "$PFX" ] || {
+	pfx="--prefix=""$PFX"
+ }
+
+ ( \
+ mkdir -p "$OBJ" || exit 1
+ cd "$OBJ" && \
+ "../""$SRC""/configure" $pfx $CFG "$@" 2>&1 | \
+ tee "$CWD""/log/cfg/cfg.""$SRC"".log"
+ [ ${PIPESTATUS[0]} -eq 0 ] || return 1
+ ) || exit $F_VAR_ERR
+}
+
+
+f_go_ccfg ()
+{
+ (
+ mkdir -p "$OBJ" || exit 1
+ cd "$OBJ" && \
+ cmake "$@" $CFG "../$SRC" 2>&1 | \
+ tee "$CWD""/log/cfg/cfg.""$SRC"".log"
+ [ ${PIPESTATUS[0]} -eq 0 ] || return 1
+ ) || exit 1
+}
+
+# build in OBJ..
+f_go_mak ()
+{
+ ( \
+ cd "$OBJ" && \
+ make "$@" 2>&1 | \
+ tee "$CWD""/log/mak/mak.""$SRC"".log"
+ [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
+ ) || exit $F_VAR_ERR
+}
+
+# install to PFX..
+f_go_ins ()
+{
+ ( \
+ cd "$OBJ" && \
+ make "$@" "$F_GO_INS_ACTION" 2>&1 | \
+ tee "$CWD""/log/ins/ins.""$SRC"".log"
+ [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
+ ) || exit $F_VAR_ERR
+}
+
+# uninstall from PFX
+f_go_rem ()
+{
+ ( \
+ cd "$OBJ" && \
+ make "$@" uninstall
+ ) || exit $F_VAR_ERR
+}
+
+# remove OBJ, SRC or both..
+f_go_del ()
+{
+ if test x"$1" = x"$F_GO_DEL" -o x"$F_GO_DEL" = x"all"; then return 0; fi
+
+ case "$1" in
+	obj)
+	rm -rf "$OBJ"
+	;;
+
+	src)
+	rm -rf "$SRC"
+	;;
+
+	log)
+	rm -rf "$CWD""/log/"
+	;;
+
+	all)
+	f_go_del obj
+	f_go_del src
+	;;
+
+	*)
+	;;
+ esac
+}
+
+f_go_tar_tarname ()
+{
+ local	h o v
+
+ h=`hostname`
+ o=`f_go_os`
+ v=`f_go_os_ver`
+
+ echo "$CWD""/BIN/""$PKG""-(""$h""-""$o""-""$v"")-""$VER""-bin.tar.bz2"
+}
+
+f_go_tar ()
+{
+ mkdir -p "$CWD""/BIN" || exit 1
+# tar cvjf "$CWD""/BIN/""$PKG""-(""$h"")-""$VER""-bin.tar.bz2" -C / "$PFX"
+ tar cvjf `f_go_tar_tarname` -C / "$PFX"
+}
+
+###############################################################################
+f_go_here ()
+{
+ tar --to-stdout -xf "$SUB/go.tar"
+}
+
+f_go_time_b ()
+{
+ F_GO_TIME_B=`date "+%s"`
+}
+
+f_go_time_e ()
+{
+ F_GO_TIME_E=`date "+%s"`
+}
+
+f_go_time_be ()
+{
+ echo $(($F_GO_TIME_E - $F_GO_TIME_B))
+}
+
+f_go_time ()
+{
+ local	x
+
+ echo "($NAM: "`f_go_time_be`" seconds)" 1>&2
+ [ `which sdtimetool` ] || return
+ x=$(sdtimetool --add "19700101000000" `f_go_time_be`)
+ echo "($NAM: "`sdtimetool --as-dhms "$x"`")" 1>&2
+}
+###############################################################################
+
+# gcc build specific..
+
+
+#GMP= etc, grab value
+f_go_gcc_req0_val ()
+{
+ egrep "$2""=" "$1" | awk -F'=' '{print $NF}'
+}
+
+#tarball compression differs, grab each wget
+f_go_gcc_req0_url ()
+{
+ local  v=`f_go_gcc_req0_val "$1" "$2"`
+
+ egrep "wget[[:space:]].*$2" "$1" | \
+ awk '{print $2}' | \
+ sed -e "s/\$$2/$v/"
+}
+
+#older format download_prerequisites
+f_go_gcc_req0 ()
+{
+ local  f="$1"
+ local  u i
+
+ mkdir -p "$REQ" || exit 1
+ rm -f "$SRC"".req"
+ for i in MPFR GMP MPC ISL CLOOG
+ do
+	u=`f_go_gcc_req0_url "$f" "$i"`
+	[ -z "$u" ] && continue
+
+	i=`echo "$u" | awk -F'/' '{print $NF}'`
+	[ -f "$REQ""/""$i" ] || {
+		wget -O "$REQ""/""$i" "$u" || exit $F_VAR_ERR
+	}
+	echo "$i" | sed -e 's/\.tar\..*//' >> "$SRC"".req"
+ done
+}
+
+#newer format download_prerequisites
+f_go_gcc_req1 ()
+{
+ local  f="$1"
+ local  u l i
+
+ u=`egrep "^base_url=" "$f" | \
+ awk -F '=' '{print $NF}' | awk -F"'" '{print $2}'`
+ l=`egrep "^(gmp|mpfr|mpc|isl)=" "$f" | \
+ awk -F '=' '{print $NF}' | awk -F"'" '{print $2}'`
+
+ mkdir -p "$REQ" || exit 1
+ rm -f "$SRC"".req"
+ for i in ${l}
+ do
+	[ -f "$REQ""/""$i" ] || {
+		wget -O "$REQ""/""$i" "$u""/""$i" || exit $F_VAR_ERR
+	}
+	echo "$i" | sed -e 's/\.tar\..*//' >> "$SRC"".req"
+ done
+}
+
+#grab prequisites, if missing
+f_go_gcc_req ()
+{
+ local  f="$SRC"/contrib/download_prerequisites
+ local  u
+
+ u=`egrep "^base_url=" "$f" | \
+ awk -F '=' '{print $NF}' | awk -F"'" '{print $2}'`
+ [ -z "$u" ] && {
+	f_go_gcc_req0 "$f"
+	} || {
+	f_go_gcc_req1 "$f"
+ }
+}
+
+#return (possibly) system compiler version
+f_go_gcc_ver ()
+{
+ local	spatt="[[:space:]]\(\([[:digit:]]\{1,\}\.\)\{2,\}[[:digit:]]\{1,\}\)[[:space:]].*"
+
+ gcc -v 2>&1 | egrep "^gcc[[:space:]]" | sed -e "s/^gcc.*$spatt/\1/"
+}
+
+#return previous installed compiler from VER
+#the system compiler version is added to the list, as is VER itself
+#if VER is silly then the result will be
+f_go_gcc_prev ()
+{
+ local	d=`dirname "$PFX"`
+ local	r
+
+ f_tmp_add
+
+ echo "$VER" > `f_tmp_top`
+ f_go_gcc_ver >> `f_tmp_top`
+ ls -1 "$d" >> `f_tmp_top`
+ r=$(cat `f_tmp_top` | uniq | sort -V | grep -B1 -F "$VER" | head -1)
+ echo "$d""/""$r"
+
+ f_tmp_rem
+}
+
+# build requisite $1 with config ${2..}
+f_go_gcc_req_bld ()
+{
+ [ $# -lt 1 ] && {
+	echo "$NAM: f_go_gcc_req_bld [gmp|mpfr|mpc|isl|cloog]" 1>&2
+	exit $F_VAR_ERR
+ }
+
+ local	l=`echo "$1" | awk '{print tolower($0);}'`
+ local	u=`echo "$1" | awk '{print toupper($0);}'`
+
+ shift
+ ( \
+ export PKG="$l"
+ export VER=`f_go_req_ver "$PKG"`
+ [ -z "$VER" ] && return 0
+ export PFX="$REQ""/""$u""/""$VER"
+ [ -d "$PFX" ] || {
+	cd "$REQ" && \
+CFG="
+$CFG
+$@
+"
+	export CFG
+	../go.req all || return $F_VAR_ERR
+ }
+ ) || return $F_VAR_ERR
+}
+
+#return a "--with-*=/some/path" entry dependent on $1
+#eg --with-gmp=/home/foo/gcc/REQ/GMP/4.3.2
+f_go_gcc_req_cfg ()
+{
+ [ $# -lt 1 ] && {
+	echo "$NAM: f_go_gcc_req_cfg [gmp|mpfr|mpc|isl|cloog]" 1>&2
+	exit $F_VAR_ERR
+ }
+
+ local	r=`f_go_req_ver "$1"`
+ [ -z "$r" ] && return
+
+ echo "--with-"`f_go_lwr "$1"`"=""$REQ""/"`f_go_upr "$1"`"/""$r"
+}
+
+#remove [obj|src|req] for prerequisites
+f_go_gcc_req_del ()
+{
+ local	i
+
+ case "$1" in
+	req)
+	for i in gmp mpfr mpc isl cloog
+ 	do
+		rm -rf "$REQ""/"`f_go_upr "$i"`"/"`f_go_req_ver "$i"`
+		rmdir "$REQ""/"`f_go_upr "$i"` 2>/dev/null
+ 	done
+	rm -f "$PKG""-""$VER"".req"
+	;;
+
+	obj)
+	for i in gmp mpfr mpc isl cloog
+	do
+		rm -rf "$REQ""/obj-"`f_go_lwr "$i"`"/"`f_go_req_ver "$i"`
+ 	done
+	;;
+
+	src)
+	for i in gmp mpfr mpc isl cloog
+	do
+		rm -rf "$REQ""/"`f_go_lwr "$i"`"-"`f_go_req_ver "$i"`
+ 	done
+	;;
+
+	*)
+	;;
+ esac
+}
+
+#f_go_distcc_hosts ()
+#{
+# local	h=`hostname`
+#
+# echo "$1" | sed -e "s/$h[^[:space:]]\{0,\}//g"
+#}
+# Pass a lists of hosts, get a single line back of pingable ones.
+f_go_distcc_hosts ()
+{
+ local	i r
+
+ while [ $# -gt 0 ]
+ do
+	i="$1"
+	shift
+	ping -q -c 1 "$i" >/dev/null 2>&1 || continue
+	r="$r"" ""$i"
+ done
+ echo "$r" | sed -e 's/^[[:space:]]//'
+}
+
+###############################################################################
+}
+###############################################################################
