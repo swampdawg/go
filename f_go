@@ -1,4 +1,3 @@
-#~~~Licence
 [ -z "$F_GO" ] && {
 	F_GO="f_go"
 ###############################################################################
@@ -583,25 +582,60 @@ f_go_gcc_req_del ()
  esac
 }
 
-#f_go_distcc_hosts ()
-#{
-# local	h=`hostname`
-#
-# echo "$1" | sed -e "s/$h[^[:space:]]\{0,\}//g"
-#}
-# Pass a lists of hosts, get a single line back of pingable ones.
+#find viable distcc hosts using $CC or 'gcc' if $CC=nul appending localhost
+#needs to ssh into each so this host must have pubkey on all targets or they
+#will be skipped.
+#eg: a@b c@d e@f/3
 f_go_distcc_hosts ()
 {
- local	i r
+ local	i r x
+ local	lhost ruser rhost dspec
+ local	cc="$CC"
+ local	host target
+
+ [ -z "$cc" ] && cc="gcc"
+
+ host=$("$cc" -dumpmachine)
+ lhost=$(hostname)
 
  while [ $# -gt 0 ]
  do
-	i="$1"
+	echo "$1" | egrep -q "@"
+	[ $? -eq 0 ] || {
+		shift
+		continue
+	}
+	ruser=$(echo "$1" | sed -e 's/@.*//')
+	rhost=$(echo "$1" | sed -e 's/.*@//' -e 's,/.*,,')
+	dspec=$(echo "$1" | sed -e 's,.*/,,' -e 's/[^[:digit:]]\{1,\}//')
 	shift
-	ping -q -c 1 "$i" >/dev/null 2>&1 || continue
-	r="$r"" ""$i"
+	[ "$lhost" == "$rhost" ] && continue
+
+	ping -q -c 1 "$rhost" >/dev/null 2>&1 || continue
+	target=$( \
+		ssh \
+		-o UserKnownHostsFile=/dev/null \
+		-o StrictHostKeyChecking=no \
+		-o PasswordAuthentication=no \
+		"$ruser"@"$rhost" \
+		"$cc -dumpmachine" 2>/dev/null \
+	)
+
+	[ $? -ne 0 ] && continue
+	[ "$host" != "$target" ] && continue
+	r="$r"" ""$rhost"
  done
- echo "$r" | sed -e 's/^[[:space:]]//'
+
+ case $(f_go_os) in
+	raspbian)
+	x="--localslots=1 --localslots_cpp=2"
+	;;
+
+	*)
+	;;
+ esac
+
+ echo "$r"" localhost/"$(f_go_bproc)" $x" | sed -e 's/^[[:space:]]//'
 }
 
 ###############################################################################
