@@ -365,7 +365,7 @@ f_go_tar ()
 {
  mkdir -p "$CWD""/BIN" || exit 1
 # tar cvjf "$CWD""/BIN/""$PKG""-(""$h"")-""$VER""-bin.tar.bz2" -C / "$PFX"
- tar cvjf `f_go_tar_tarname` -C / "$PFX"
+ tar cvjf `f_go_tar_tarname` -C / $(dirname "$PFX")"/"$(readlink "$PFX")
 }
 
 ###############################################################################
@@ -595,6 +595,7 @@ f_go_distcc_hosts ()
 
  [ -z "$cc" ] && cc="gcc"
 
+ which "$cc" >/dev/null || exit $F_VAR_ERR
  host=$("$cc" -dumpmachine)
  lhost=$(hostname)
 
@@ -635,7 +636,8 @@ f_go_distcc_hosts ()
 	;;
  esac
 
- echo "$r"" localhost/"$(f_go_bproc)" $x" | sed -e 's/^[[:space:]]//'
+ echo "$r"" localhost/"$(f_go_bproc)" $x" | \
+	sed -e 's/^[[:space:]]\{1,\}//' -e 's/[[:space:]]\{1,\}$//'
 }
 
 ###############################################################################
