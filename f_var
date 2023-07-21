@@ -1,4 +1,3 @@
-#~~~Licence
 [ -z "$F_VAR" ] && {
     F_VAR="f_var"
 ###############################################################################
@@ -45,7 +44,7 @@
     F_VAR_OSVERSION=
 
     #default mail recipient
-    F_VAR_MAIL_RCPT="root@localhost"
+    F_VAR_MAIL_RCPT="github@swampdog.co.uk"
 ###############################################################################
 
 # scan etc/filesystems for arg /mountpoint then for a match extract the
