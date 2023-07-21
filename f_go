@@ -10,6 +10,9 @@
 F_GO_TIME_B=0
 F_GO_TIME_E=0
 : ${F_GO_INS_ACTION:="install"}
+F_GO_TMPFS=
+F_GO_SAVFS=
+F_GO_SDIR=
 ###############################################################################
 f_go_wrn ()
 {
@@ -105,19 +108,10 @@ f_go_req_ver ()
 # number of cores..
 f_go_nproc ()
 {
- cat /proc/cpuinfo | egrep "^processor" | wc -l
+ nproc
 }
 
 # reasonable number of build cores..
-#f_go_bproc ()
-#{
-# bc -v >/dev/null 2>&1
-# [ $? -eq 0 ] || {
-#	echo "$NAM: f_go_bproc: 'bc' is not installed!" 1>&2
-#	kill -s SIGQUIT $$
-# }
-# echo `f_go_nproc`" / 2 + 1" | bc
-#}
 f_go_bproc ()
 {
  echo $((`f_go_nproc` -1))
@@ -173,6 +167,19 @@ f_go_os_ver ()
  esac
 }
 
+f_go_os_arch ()
+{
+ case `uname -m` in
+	*64*)
+	echo "64"
+	;;
+
+	*)
+	echo "32"
+	;;
+ esac
+}
+
 f_go_syscc_cfg ()
 {
  local i
@@ -181,6 +188,55 @@ f_go_syscc_cfg ()
  egrep "Configured[[:space:]]{1,}with:" | \
  sed -e 's/--/\n--/g' | \
  egrep -v "Configured[[:space:]]{1,}with:"
+}
+
+f_go_tmpfs ()
+{
+ local	opt="defaults,mode=744,size=""$F_GO_TMPFS"
+ local	r
+
+ [ $# -lt 2 ] && {
+	echo "f_go_tmpfs: [ action ] $OBJ|$SRC" 1>&2
+	exit 1
+ }
+
+ case "$1" in
+	ismounted)
+	[ -d "$2" ] || return 1
+	r=$(sudo mount | egrep "^tmpfs[[:space:]]" | grep "$2"[[:space:]])
+	! [ -z "$r" ]
+	;;
+
+	init)
+	mkdir -p "$2" || exit 1
+	if $(f_go_tmpfs ismounted "$2"); then return;fi
+	[ -z "$F_GO_TMPFS" ] && return
+	sudo mount -t tmpfs -o "$opt" tmpfs "$2" || exit 1
+	f_go_chown "$2" 
+	;;
+
+	term)
+	rm -rf "$2" 2>/dev/null
+	if ! $(f_go_tmpfs ismounted "$2"); then return;fi
+	sudo umount "$2" || exit 1
+	rmdir "$2" | exit 1
+	[ -z "$F_GO_SAVFS" ] && return
+	rm -rf "$2"".tmpfs"
+	;;
+
+	save)
+	mkdir -p "$2"".tmpfs" || exit 1
+	sudo rsync -auHx "$2""/" "$2"".tmpfs""/" || exit 1
+	;;
+
+	load)
+	mkdir -p "$2"".tmpfs" || exit 1
+	sudo rsync -auHx "$2"".tmpfs""/" "$2""/" || exit 1
+	;;
+
+	*)
+	;;
+ esac
 }
 
 # initialise defaults and variables which are not already defined..
@@ -203,6 +259,7 @@ f_go_init ()
  f_go_OBJ "$SRC"
 
  mkdir -p \
+ "log/hlp" \
  "log/cfg" \
  "log/mak" \
  "log/ins" \
@@ -220,15 +277,23 @@ f_go_arc_d ()
  elif [ -f "$1"".tar" ];	then e=".tar";		x=""
  fi
 
+ f_go_tmpfs init "$SRC"
  tar xv"$x"f "$1""$e" || exit $F_VAR_ERR
 }
 
 # unpack tarball or make one from SRC..
 f_go_arc ()
 {
+ local	i
+
  case "$1" in
 	-d)
 	f_go_arc_d "$2"
+	for i in "$SRC"".patch".???
+	do
+		[ -f "$i" ] || continue;
+		patch -p0 < "$i"
+	done
 	;;
 
 	-z)
@@ -245,6 +310,11 @@ f_go_arc ()
 	exit $F_VAR_ERR
 	;;
  esac
+}
+
+f_go_hlp ()
+{
+ ./"$SRC""$F_GO_SDIR""/configure" --help 2>&1 | tee "$CWD""/log/hlp/hlp.""$SRC"".log"
 }
 
 f_go_gen ()
@@ -271,35 +341,59 @@ f_go_cfg ()
  }
 
  ( \
- mkdir -p "$OBJ" || exit 1
+ f_go_tmpfs init "$OBJ"
+# mkdir -p "$OBJ" || exit 1
  cd "$OBJ" && \
- "../""$SRC""/configure" $pfx $CFG "$@" 2>&1 | \
+ "../""$SRC""$F_GO_SDIR""/configure" $pfx $CFG "$@" 2>&1 | \
  tee "$CWD""/log/cfg/cfg.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return 1
  ) || exit $F_VAR_ERR
+ [ -z "$F_GO_SAVFS" ] || f_go_tmpfs save "$SRC"
 }
 
 
 f_go_ccfg ()
 {
+ local	pfx="$PFX"
+
+ [ -z "$pfx" ] || {
+	pfx="-DCMAKE_INSTALL_PREFIX=""$PFX"
+ }
+
  (
- mkdir -p "$OBJ" || exit 1
+ f_go_tmpfs init "$OBJ"
+# mkdir -p "$OBJ" || exit 1
  cd "$OBJ" && \
- cmake "$@" $CFG "../$SRC" 2>&1 | \
+ cmake "$@" $CFG $pfx "../$SRC" 2>&1 | \
  tee "$CWD""/log/cfg/cfg.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return 1
  ) || exit 1
+ [ -z "$F_GO_SAVFS" ] || f_go_tmpfs save "$SRC"
 }
 
 # build in OBJ..
 f_go_mak ()
 {
+ [ -z "$F_GO_SAVFS" ] || f_go_tmpfs load "$OBJ"
  ( \
  cd "$OBJ" && \
  make "$@" 2>&1 | \
  tee "$CWD""/log/mak/mak.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
  ) || exit $F_VAR_ERR
+ [ -z "$F_GO_SAVFS" ] || f_go_tmpfs save "$OBJ"
+}
+
+f_go_cmak ()
+{
+ [ -z "$F_GO_SAVFS" ] || f_go_tmpfs load "$OBJ"
+ ( \
+ cd "$OBJ" && \
+ cmake --build "." "$@" 2>&1 | \
+ tee "$CWD""/log/mak/mak.""$SRC"".log"
+ [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
+ ) || exit $F_VAR_ERR
+ [ -z "$F_GO_SAVFS" ] || f_go_tmpfs save "$OBJ"
 }
 
 # install to PFX..
@@ -308,6 +402,16 @@ f_go_ins ()
  ( \
  cd "$OBJ" && \
  make "$@" "$F_GO_INS_ACTION" 2>&1 | \
+ tee "$CWD""/log/ins/ins.""$SRC"".log"
+ [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
+ ) || exit $F_VAR_ERR
+}
+
+f_go_cins ()
+{
+ ( \
+ cd "$OBJ" && \
+ cmake --install "." "$@" 2>&1 | \
  tee "$CWD""/log/ins/ins.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
  ) || exit $F_VAR_ERR
@@ -329,11 +433,13 @@ f_go_del ()
 
  case "$1" in
 	obj)
-	rm -rf "$OBJ"
+	f_go_tmpfs term "$OBJ"
+#	rm -rf "$OBJ"
 	;;
 
 	src)
-	rm -rf "$SRC"
+	f_go_tmpfs term "$SRC"
+#	rm -rf "$SRC"
 	;;
 
 	log)
@@ -365,9 +471,28 @@ f_go_tar ()
 {
  mkdir -p "$CWD""/BIN" || exit 1
 # tar cvjf "$CWD""/BIN/""$PKG""-(""$h"")-""$VER""-bin.tar.bz2" -C / "$PFX"
- tar cvjf `f_go_tar_tarname` -C / $(dirname "$PFX")"/"$(readlink "$PFX")
+ tar cvjf `f_go_tar_tarname` --exclude='lost+found' -C / $(readlink -m "$PFX")
 }
 
+f_go_chmod ()
+{
+ [ $# -lt 2 ] && {
+	echo "$NAM: f_go_chmod [perm] [item]" 1>&2
+	echo "$NAM: f_go_chmod $@" 1>&2
+	exit $F_VAR_ERR
+ }
+ sudo -E chmod "$1" "$2"
+}
+
+f_go_chown ()
+{
+ [ $# -lt 1 ] && {
+	echo "$NAM: f_go_chown [item]" 1>&2
+	echo "$NAM: f_go_chown $@" 1>&2
+	exit $F_VAR_ERR
+ }
+ sudo -E chown `id -un`:`id -gn` "$1"
+}
 ###############################################################################
 f_go_here ()
 {
@@ -467,6 +592,11 @@ f_go_gcc_req ()
 {
  local  f="$SRC"/contrib/download_prerequisites
  local  u
+
+ [ -z "$REQ" ] && {
+	echo "$NAM: f_go_gcc_req REQ= not set!" 1>&2
+	exit $F_VAR_ERR
+ }
 
  u=`egrep "^base_url=" "$f" | \
  awk -F '=' '{print $NF}' | awk -F"'" '{print $2}'`
@@ -621,8 +751,11 @@ f_go_distcc_hosts ()
 		"$ruser"@"$rhost" \
 		"$cc -dumpmachine" 2>/dev/null \
 	)
-
 	[ $? -ne 0 ] && continue
+
+	host=$(echo "$host" | awk -F'-' '{print $1}')
+	target=$(echo "$target" | awk -F'-' '{print $1}')
+
 	[ "$host" != "$target" ] && continue
 	r="$r"" ""$rhost"
  done
