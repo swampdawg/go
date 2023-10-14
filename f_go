@@ -493,6 +493,29 @@ f_go_chown ()
  }
  sudo -E chown `id -un`:`id -gn` "$1"
 }
+
+f_go_rsync ()
+{
+ local  n=`basename "$CWD"`
+ local  d=`dirname "$CWD"`
+ local	f="$NAM"".rsync"
+
+ [ -z "$1" ] && {
+        echo "$NAM: fcp_rsync [ user@host ]" 1>&2
+        exit 1
+ }
+ [ -f "$f" ] || {
+	echo "$NAM: fcp_rsync needs file $f!" 1>&2
+	exit 1
+ }
+
+ (
+ cd .. || exit 1
+ rsync --progress -auxv \
+        --exclude-from="$CWD""/""$f" \
+        './'"$n" "$1":"$d""/"
+ )
+}
 ###############################################################################
 f_go_here ()
 {
@@ -519,7 +542,10 @@ f_go_time ()
  local	x
 
  echo "($NAM: "`f_go_time_be`" seconds)" 1>&2
- [ `which sdtimetool` ] || return
+ [ `which sdtimetool` ] || {
+	echo "$F_GO: No sdtimetool!" 1>&2
+	return $F_VAR_OKI
+ }
  x=$(sdtimetool --add "19700101000000" `f_go_time_be`)
  echo "($NAM: "`sdtimetool --as-dhms "$x"`")" 1>&2
 }
