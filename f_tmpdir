@@ -1,0 +1,70 @@
+[ -z "$F_TMPDIR" ] && {
+    F_TMPDIR="f_tmpdir"
+###############################################################################
+.   "$SUB/f_var"
+.   "$SUB/f_trap"
+
+    F_TMPDIR_STK=
+    F_TMPDIR_DIR=
+    F_TMPDIR_ITM=
+###############################################################################
+# if TMP exists then honour it else assume /tmp
+[ -z "$TMP" ] && {
+    F_TMPDIR_DIR="/tmp"
+} || {
+    F_TMPDIR_DIR="$TMP"
+}
+# ensure tempdir exists
+[ -d "$F_TMPDIR_DIR" ] || {
+    mkdir -p "$F_TMPDIR_DIR" || {
+        echo "$F_TMPDIR: mkdir \"$F_TMPDIR_DIR\" failed" 1>&2
+        exit $F_VAR_BAD
+    }
+}
+
+# add a new tempname to the stack and create that file read/write owner only
+# bailout on failure
+f_tmpdir_add ()
+{
+ F_TMPDIR_ITM="$F_TMPDIR_DIR/$NAM.$$.$RANDOM"
+ [ -d "$F_TMPDIR_ITM" ] && {
+    echo "$F_TMPDIR: \"$F_TMPDIR_ITM\" - already exists" 1>&2
+    exit $F_VAR_BAD
+ }
+ (mkdir -p "$F_TMPDIR_ITM" && chmod 700 "$F_TMPDIR_ITM") || {
+    echo "$F_TMPDIR: \"$F_TMPDIR_ITM\" - failed to create" 1>&2
+    exit $F_VAR_BAD
+ }
+ F_TMPDIR_STK="$F_TMPDIR_ITM $F_TMPDIR_STK"
+}
+
+# echo filename on top of stack.
+# this filename exists already and is initially zero length.
+f_tmpdir_top ()
+{
+ echo "$F_TMPDIR_STK" | sed -e 's/[[:blank:]].*$//'
+}
+
+# pop the filename on the top of the stack, also remove that file.
+# bailout if file cannot be removed as it indicates a fundamental logic
+# error within caller's script.
+f_tmpdir_rem ()
+{
+ F_TMPDIR_ITM=`f_tmpdir_top`
+ [ -z "$F_TMPDIR_ITM" ] && {
+    echo "$F_TMPDIR: cannot pop empty stack" 1>&2
+    exit $F_VAR_BAD
+ }
+
+ rm -r "$F_TMPDIR_ITM" || {
+    echo "$F_TMPDIR: \"$F_TMPDIR_ITM\" - cannot remove (?empty?)" 1>&2
+    exit $F_VAR_BAD
+ }
+ F_TMPDIR_STK=$( \
+    echo "$F_TMPDIR_STK" | \
+    sed -e 's/[[:graph:]]\{1,\}[[:blank:]]\{1,\}//' \
+ )
+}
+###############################################################################
+}
+###############################################################################
