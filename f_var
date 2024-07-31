@@ -1,7 +1,7 @@
 [ -z "$F_VAR" ] && {
     F_VAR="f_var"
 ###############################################################################
-.   "$SUB/f_tmp"
+.   "$GOSUB/f_tmp"
 
     #standard return codes
     F_VAR_OKI=0
@@ -15,14 +15,14 @@
     F_VAR_TRAP="1 2 3 15"
 
     #full path to our lockfile, if it exists.
-    F_VAR_LCK_DIR="/var/"$(basename `dirname "$SUB"`)"/lck"
+    F_VAR_LCK_DIR="/var/"$(basename `dirname "$GOSUB"`)"/lck"
 
     #base data folder
-    F_VAR_DAT="/var/"$(basename `dirname "$SUB"`)"/dat/$NAM"
+    F_VAR_DAT="/var/"$(basename `dirname "$GOSUB"`)"/dat/$NAM"
 
 ##?do we need this any more?
     #rundata (time pid)
-    F_VAR_DAT_RUN="/var/"$(basename `dirname "$SUB"`)"/run"
+    F_VAR_DAT_RUN="/var/"$(basename `dirname "$GOSUB"`)"/run"
     #default for stopping runs
     F_VAR_DAT_RUNLIMIT="5"
 ##^^^
@@ -44,7 +44,7 @@
     F_VAR_OSVERSION=
 
     #default mail recipient
-    F_VAR_MAIL_RCPT="github@swampdog.co.uk"
+    F_VAR_MAIL_RCPT="unix.alerts@nottscc.gov.uk"
 ###############################################################################
 
 # scan etc/filesystems for arg /mountpoint then for a match extract the
