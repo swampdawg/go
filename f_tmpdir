@@ -1,8 +1,8 @@
 [ -z "$F_TMPDIR" ] && {
     F_TMPDIR="f_tmpdir"
 ###############################################################################
-.   "$SUB/f_var"
-.   "$SUB/f_trap"
+.   "$GOSUB/f_var"
+.   "$GOSUB/f_trap"
 
     F_TMPDIR_STK=
     F_TMPDIR_DIR=
