@@ -1,9 +1,9 @@
 [ -z "$F_GO" ] && {
 	F_GO="f_go"
 ###############################################################################
-.	"$SUB/f_var"
-.	"$SUB/f_trap"
-.	"$SUB/f_tmp"
+.	"$GOSUB/f_var"
+.	"$GOSUB/f_trap"
+.	"$GOSUB/f_tmp"
 ###############################################################################
 # This file requires 'bash' rather than 'sh'
 ###############################################################################
@@ -246,6 +246,10 @@ f_go_tmpfs ()
 	load)
 	mkdir -p "$2"".tmpfs" || exit 1
 	sudo rsync -auHx "$2"".tmpfs""/" "$2""/" || exit 1
+	;;
+
+	trash-saves)
+	rm -rf "$2"".tmpfs"
 	;;
 
 	*)
@@ -540,7 +544,7 @@ f_go_rsync ()
 ###############################################################################
 f_go_here ()
 {
- tar --to-stdout -xf "$SUB/go.tar"
+ tar --to-stdout -xf "$GOSUB/go.tar"
 }
 
 f_go_time_b ()
