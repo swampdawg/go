@@ -1,6 +1,12 @@
 [ -z "$F_GO" ] && {
 	F_GO="f_go"
 ###############################################################################
+##~~~2do: aim toward losing this backward compat.
+[ -z "$GOSUB" ] && {
+        GOSUB=$SUB
+        echo "$NAM: Script needs updating (GOSUB)" 1>&2
+}
+##
 .	"$GOSUB/f_var"
 .	"$GOSUB/f_trap"
 .	"$GOSUB/f_tmp"
