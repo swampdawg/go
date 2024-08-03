@@ -1,6 +1,13 @@
 [ -z "$F_TMPDIR" ] && {
     F_TMPDIR="f_tmpdir"
 ###############################################################################
+##~~~2do: aim toward losing this backward compat.
+[ -z "$GOSUB" ] && {
+        GOSUB=$SUB
+        echo "$NAM: Script needs updating (GOSUB)" 1>&2
+}
+##
+
 .   "$GOSUB/f_var"
 .   "$GOSUB/f_trap"
 
