@@ -1,0 +1,123 @@
+##!/bin/bash
+
+NAM=`basename "$0"`
+CWD=`pwd`
+GOSUB="/usr/local/sd/syschk/lib"
+
+. "$GOSUB""/f_go"
+
+: ${PKG:="mariadb"}
+: ${VER:="11.4.2"}
+
+F_GO_TMPFS=1G
+
+CFG="
+-DWITHOUT_SERVER=on
+-DPLUGIN_AUTH_PAM=no
+"
+
+PFX=
+
+fcp_usage ()
+{
+cat<<EOF
+${NAM}: [ --help | -h ]
+${NAM}: [ arc ] [-d ]
+${NAM}: [ cfg | mak | ins | del ]
+
+Download the source for..
+${PKG}-${VER}
+..yourself for this example!
+
+This will compile the client. It's up to you to figure out the required
+dev packages, kind-of what this tool is for really.
+EOF
+}
+
+fcp_arc ()
+{
+ f_go_arc "$@"
+}
+
+fcp_cfg ()
+{
+ f_go_ccfg "$@"
+}
+
+fcp_mak ()
+{
+ f_go_cmak "$@"
+}
+
+fcp_ins ()
+{
+ f_go_cins "$@"
+}
+
+fcp_del ()
+{
+ f_go_del "$@"
+}
+
+ARG="$1"
+shift
+fcp_main ()
+{
+ f_go_init
+
+#Just in case an install is attempted, put it somewhere transient..
+PFX="/tmp/${PKG}/${VER}"
+
+ f_go_time_b
+ case "$ARG" in
+	--help | -h)
+	fcp_usage
+	exit 0
+	;;
+
+	arc)
+	fcp_arc "$@" "$SRC"
+	;;
+
+	del)
+	fcp_del "$@"
+	;;
+
+	cfg)
+	fcp_cfg "$@"
+	;;
+
+	mak)
+	fcp_mak "$@"
+	;;
+
+	ins)
+	fcp_ins "$@"
+	;;
+
+	all)
+	fcp_arc -d "$SRC" || exit 1
+	fcp_cfg || exit 1
+	fcp_mak -j `f_go_bproc` || exit 1
+df -hP | grep ^tmpfs | egrep "$PKG"
+echo "^^^(dont forget to \"./go.db all\" to remove these)"
+#	fcp_ins || exit 1
+#	fcp_del all
+	;;
+
+	*)
+	echo "Bad command!" 1>&2
+	exit 1
+	;;
+ esac
+ RETV=$?
+ echo "($NAM: $0)[""$RETV"']'
+ f_go_time_e
+ f_go_time
+ return $RETV
+}
+
+fcp_main "$@"
+
+#Hint:
+#In addition to log/ folder, note also OBJ/CMakeCache.txt
