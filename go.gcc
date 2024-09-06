@@ -1,0 +1,198 @@
+##!/bin/bash
+
+NAM=`basename "$0"`
+CWD=`pwd`
+GOSUB="/usr/local/sd/syschk/lib"
+
+. "$GOSUB""/f_go"
+
+: ${PKG:="gcc"}
+: ${VER:="14.2.0"}
+
+#Use a tmpfs this big for both SRC and OBJ..
+F_GO_TMPFS=6G
+#..it's possible to tag an inode spec on..
+#F_GO_TMPFS=6G,nr_inodes=350k
+..as that can be a cause of "out of space" errors on some hosts.
+#Comment out to use the disk proper.
+
+#The options (except --prefix=)..
+CFG="
+--disable-bootstrap
+--disable-multilib
+"
+
+#this gets set by f_go_init..
+PFX=
+#..if you want to override it then do so after f_go_init.
+#default is /usr/local/$PKG/$VER 
+#and install is performed as this user so the target had better already
+#by owned by us.
+
+fcp_usage ()
+{
+cat<<EOF
+${NAM}: (your help here)
+EOF
+}
+
+#Usually.. unpack a tarball. If there are patches (no example here) then they
+# will be applied after unpacking.
+fcp_arc ()
+{
+ f_go_arc "$@"
+}
+
+#Create OBJ, cd into OBJ then..
+#../SRC/configure $CFG "$@"
+fcp_cfg ()
+{
+ f_go_cfg "$@"
+}
+
+#Build the configured source..
+fcp_mak ()
+{
+ f_go_mak "$@"
+}
+
+#Install the built source..
+fcp_ins ()
+{
+ f_go_ins "$@"
+}
+
+#Delete either OBJ or SRC or BOTH (all)..
+fcp_del ()
+{
+ f_go_del "$@"
+}
+
+#This kind of thing is too package dependant to be a generic feature.
+#Ordinarily leave this kind of thing to another tool elsewhere but by way
+#of an example, fetch the source and repack it so we never have to download
+#anything for building in future.
+fcp_init ()
+{
+ local	site="https://mirrorservice.org/sites/sourceware.org/pub/gcc/releases"
+ local	file="$SRC"".tar.xz"
+
+ #?did we do it already?
+ [ -f "$file" ] && return;
+
+ #original source..
+ wget -c "$site""/""$SRC"/"$file"
+
+ #unpack it and lose the original..
+ f_go_arc -d "$SRC"
+ rm -v "$file"
+
+ #download the prereq's, unpack and lose the prereq tarballs..
+ (
+ cd $SRC || exit 1
+ ./contrib/download_prerequisites || exit 1
+ rm -v *.tar.?*
+ ) || exit 1
+
+ #repack..
+ f_go_arc -z "$SRC"
+
+ #lose the source so we're back to "normal"
+ f_go_del src
+}
+
+#Main workflow..
+ARG="$1"
+shift
+fcp_main ()
+{
+ #This sets PFX,SRC,OBJ and so forth..
+ f_go_init
+
+ #Override the default PFX here.
+ #It can't be done from the console like PKG,VER (safety).
+#PFX=/some/alternate/path
+
+ #Now we can fudge in a download..
+ fcp_init
+
+ f_go_time_b
+ case "$ARG" in
+	--help | -h)
+	fcp_usage
+	exit 0
+	;;
+
+	arc)
+	fcp_arc "$@" "$SRC"
+	;;
+
+	del)
+	fcp_del "$@"
+	;;
+
+	cfg)
+	fcp_cfg "$@"
+	;;
+
+	mak)
+	fcp_mak "$@"
+	;;
+
+	ins)
+	fcp_ins "$@"
+	;;
+
+	#Typically "all" is what you invoke to get the thing done without
+	#having to figure out what all the above is doing at a later date..
+	all)
+	fcp_arc -d "$SRC" || exit 1
+	fcp_cfg || exit 1
+	fcp_mak -j `f_go_bproc` || exit 1
+	fcp_ins || exit 1
+	fcp_del all
+	;;
+
+	*)
+	fcp_usage
+	exit 1
+	;;
+ esac
+ RETV=$?
+ echo "($NAM: $0)[""$RETV"']'
+ f_go_time_e
+ f_go_time
+ return $RETV
+}
+
+fcp_main "$@"
+
+#A typical workflow:
+#
+#1) grab tarball.
+#2) set PKG and VER
+#3) ./go arc -d (as a test)
+#4) put 'configure' options in CFG to taste
+#5) ./go cfg
+#6) ./go mak -j$NPROC
+#
+#On success above:
+#
+# install to /usr/local/$PKG/$VER (remember to make target user writeable)
+# ./go ins
+#
+#When done:
+#
+# ./go del all
+# ..and now construct your "all" lines and test "all" works.
+#
+
+#Hints:
+#Look in log/ for various phases (also OBJ/config.log).
+#Searching for "error:" in log/mak/mak.$PKG-$VER.log is worthwhile.
+#Sometimes a subsequent "./go mak -j1" will help untangle the cause.
+#To temporarily override a package version a simple..
+# VER=14.1.0 ./go {blah}
+#..will suffice.
+#
+
