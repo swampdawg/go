@@ -2,9 +2,9 @@
 
 NAM=`basename "$0"`
 CWD=`pwd`
-SUB="/usr/local/sd/syschk/lib"
+GOSUB="/usr/local/sd/syschk/lib"
 
-. "$SUB""/f_go"
+. "$GOSUB""/f_go"
 
 : ${PKG:="gotest"}
 : ${VER:="0.0.0"}
@@ -52,15 +52,22 @@ and is currently: $PFX.
 Don't mess with \$SRC,\$OBJ - they get set from \$PKG,\$VER.
 
 F_GO_TMPFS specifies how large the SRC,OBJ tmpfs mounts will be. Comment out
-to use the disk like normal. 32bit systems will fail after 4G.
+to use the disk like normal. 32bit systems may fail after 4G but check inodes.
 
 F_GO_DEL can be uncommented set to src or all to prevent go del [src|all] from
 removing SRC,all - handy for those pesky in-tree builds or development.
 
 You really ought to look in $SUB/f_go before fiddling!
 
-You configure options go in CFG after f_go_init in fcp_main, noting you don't
+Your configure options go in CFG after f_go_init in fcp_main, noting you don't
 pass --prefix or INSTALL_PREFIX there: set PFX for that.
+
+Should you uncomment 'f_go_time', ignore the warning about 'sdtimetool'. That
+program contains propietory code currently so is not shipped atm. All it does
+is show the elapsed time in an easy to view manner. Just use 'time' for now.
+
+Ordinarily you'll be using one or other of these (autotool/cmake) methods.
+See 'go.gcc' for an autotool example and 'go.db' for a cmake method.
 EOF
 }
 
@@ -234,7 +241,7 @@ CFG="
  RETV=$?
  echo "($NAM: $0)[""$RETV"']'
  f_go_time_e
- f_go_time
+# f_go_time
  return $RETV
 }
 
