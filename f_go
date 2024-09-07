@@ -495,14 +495,13 @@ f_go_tar_tarname ()
  v=`f_go_os_ver`
  n=`f_go_os_nam`
 
- echo "$CWD""/BIN/""$PKG""-(""$h""-""$o""-""$v""-""$n"")-""$VER""-bin.tar.bz2"
+ echo "$CWD""/BIN/""$PKG""-(""$h""-""$o""-""$v""-""$n"")-""$VER""-bin.tar.xz"
 }
 
 f_go_tar ()
 {
  mkdir -p "$CWD""/BIN" || exit 1
-# tar cvjf "$CWD""/BIN/""$PKG""-(""$h"")-""$VER""-bin.tar.bz2" -C / "$PFX"
- tar cvjf `f_go_tar_tarname` --exclude='lost+found' -C / $(readlink -m "$PFX")
+ tar cvJf `f_go_tar_tarname` --exclude='lost+found' -C / $(readlink -m "$PFX")
 }
 
 f_go_chmod ()
