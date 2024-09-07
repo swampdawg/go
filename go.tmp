@@ -1,0 +1,66 @@
+#!/bin/bash
+
+NAM=`basename "$0"`
+GOSUB="/usr/local/sd/syschk/lib"
+
+. "$GOSUB""/f_tmp"
+. "$GOSUB""/f_tmpdir"
+
+fcp_usage ()
+{
+cat<<EOF
+${NAM}: [ --help | -h ]
+
+An example for f_tmp and f_tmpdir usage.
+
+They're implemented like a stack. You can keep adding them until the shell
+exhausts whatever its limit happens to be for holding a string in a variable.
+
+Typically they clean up, even on f_tmp*_add/f_tmp*_rem mismatch. In the case
+where an f_tmp*_rem is called and the "stack" is empty then exit will be
+called with value F_VAR_BAD (non zero). Arbitarily..
+F_VAR_BAD=${F_VAR_BAD}
+..and a message emitted to stderr.
+
+All variables commencing with "F_" are reserved by GOSUB.
+All functions commencing with "f_" are reserved by GOSUB.
+EOF
+}
+
+fcp_main ()
+{
+ local	t
+
+ f_tmp_add			#add a tempfile
+ t=`f_tmp_top`			#name of most recent one
+
+ f_tmp_add			#add another tempfile, now we have two
+ cp -v "$NAM" `f_tmp_top`	#put something in most recent one
+ ls -l `f_tmp_top`
+ cp -v `f_tmp_top` "$t"		#copy it to the one we saved the name of
+ ls -l "$t"
+ f_tmp_rem			#remove most recent tempfile
+
+ ls -l `f_tmp_top`		#same as $t now
+ f_tmp_rem			#remove another
+ ls -ld "/tmp/$NAM"*		#all gone
+
+ f_tmpdir_add			#add tempdir
+ t=`f_tmpdir_top`		#its name
+ cp -v "$NAM" "$t""/z"		#create a named file
+ find "$t""/"
+ f_tmpdir_rem			#lose tempdir plus all contents
+ find "$t""/"			#all gone
+
+ f_tmpdir_rem
+}
+
+case "$1" in
+	--help | -h)
+	fcp_usage
+	;;
+
+	*)
+	fcp_main "$@"
+	;;
+esac
