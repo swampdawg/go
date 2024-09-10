@@ -19,6 +19,7 @@ F_GO_TIME_E=0
 F_GO_TMPFS=
 F_GO_SAVFS=
 F_GO_SDIR=
+: ${F_GO_NOTAR:=""}
 ###############################################################################
 f_go_wrn ()
 {
@@ -501,6 +502,7 @@ f_go_tar_tarname ()
 f_go_tar ()
 {
  mkdir -p "$CWD""/BIN" || exit 1
+ [ -z "$F_GO_NOTAR" ] || return $F_GO_OKI
  tar cvJf `f_go_tar_tarname` --exclude='lost+found' -C / $(readlink -m "$PFX")
 }
 
