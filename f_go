@@ -501,9 +501,18 @@ f_go_tar_tarname ()
 
 f_go_tar ()
 {
+ local	x=`f_go_tar_tarname`
+ local	t=`echo "$x" | sed -e 's/\.xz//'`
+
  mkdir -p "$CWD""/BIN" || exit 1
  [ -z "$F_GO_NOTAR" ] || return $F_GO_OKI
- tar cvJf `f_go_tar_tarname` --exclude='lost+found' -C / $(readlink -m "$PFX")
+#tar cvJf "$t" --exclude='lost+found' -C / $(readlink -m "$PFX")
+ rm -vf "$x" "$t"
+ tar cvf "$t" --exclude='lost+found' -C / $(readlink -m "$PFX") || exit 1
+ xz -zvT `f_go_bproc` "$t" || {
+	rm -v "$t"
+	exit 1
+ }
 }
 
 f_go_chmod ()
