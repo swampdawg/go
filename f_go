@@ -19,7 +19,8 @@ F_GO_TIME_E=0
 F_GO_TMPFS=
 F_GO_SAVFS=
 F_GO_SDIR=
-: ${F_GO_NOTAR:=""}
+: ${F_GO_NOTAR:=""}	#set non-null to ignore tarball at end
+: ${F_GO_TEE:="tee"}	#set might want to add "-a" for debug wierd builds
 ###############################################################################
 f_go_wrn ()
 {
@@ -339,9 +340,10 @@ f_go_arc ()
 
 f_go_hlp ()
 {
- ./"$SRC""$F_GO_SDIR""/configure" --help 2>&1 | tee "$CWD""/log/hlp/hlp.""$SRC"".log"
+ ./"$SRC""$F_GO_SDIR""/configure" --help 2>&1 | $F_GO_TEE "$CWD""/log/hlp/hlp.""$SRC"".log"
 }
 
+#~~~hmm..
 f_go_gen ()
 {
 # local	amARGS
@@ -375,7 +377,7 @@ f_go_cfg ()
 # mkdir -p "$OBJ" || exit 1
  cd "$OBJ" && \
  "../""$SRC""$F_GO_SDIR""/configure" $pfx $CFG "$@" 2>&1 | \
- tee "$CWD""/log/cfg/cfg.""$SRC"".log"
+ $F_GO_TEE "$CWD""/log/cfg/cfg.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return 1
  ) || exit $F_VAR_ERR
  [ -z "$F_GO_SAVFS" ] || f_go_tmpfs save "$SRC"
@@ -395,7 +397,7 @@ f_go_ccfg ()
 # mkdir -p "$OBJ" || exit 1
  cd "$OBJ" && \
  cmake "$@" $CFG $pfx "../$SRC" 2>&1 | \
- tee "$CWD""/log/cfg/cfg.""$SRC"".log"
+ $F_GO_TEE "$CWD""/log/cfg/cfg.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return 1
  ) || exit 1
  [ -z "$F_GO_SAVFS" ] || f_go_tmpfs save "$SRC"
@@ -408,7 +410,7 @@ f_go_mak ()
  ( \
  cd "$OBJ" && \
  make "$@" 2>&1 | \
- tee "$CWD""/log/mak/mak.""$SRC"".log"
+ $F_GO_TEE "$CWD""/log/mak/mak.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
  ) || exit $F_VAR_ERR
  [ -z "$F_GO_SAVFS" ] || f_go_tmpfs save "$OBJ"
@@ -420,7 +422,7 @@ f_go_cmak ()
  ( \
  cd "$OBJ" && \
  cmake --build "." "$@" 2>&1 | \
- tee "$CWD""/log/mak/mak.""$SRC"".log"
+ $F_GO_TEE "$CWD""/log/mak/mak.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
  ) || exit $F_VAR_ERR
  [ -z "$F_GO_SAVFS" ] || f_go_tmpfs save "$OBJ"
@@ -433,7 +435,7 @@ f_go_ins ()
  cd "$OBJ" && \
 # echo make "$@" "$F_GO_INS_ACTION"
  make "$@" "$F_GO_INS_ACTION" 2>&1 | \
- tee "$CWD""/log/ins/ins.""$SRC"".log"
+ $F_GO_TEE "$CWD""/log/ins/ins.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
  ) || exit $F_VAR_ERR
 }
@@ -443,7 +445,7 @@ f_go_cins ()
  ( \
  cd "$OBJ" && \
  cmake --install "." "$@" 2>&1 | \
- tee "$CWD""/log/ins/ins.""$SRC"".log"
+ $F_GO_TEE "$CWD""/log/ins/ins.""$SRC"".log"
  [ ${PIPESTATUS[0]} -eq 0 ] || return $F_VAR_ERR
  ) || exit $F_VAR_ERR
 }
@@ -584,7 +586,7 @@ f_go_time ()
 
  echo "($NAM: "`f_go_time_be`" seconds)" 1>&2
  [ `which sdtimetool` ] || {
-	echo "$F_GO: No sdtimetool!" 1>&2
+	echo "$F_GO: !WRN: No sdtimetool!" 1>&2
 	return $F_VAR_OKI
  }
  x=$(sdtimetool --add "19700101000000" `f_go_time_be`)
