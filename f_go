@@ -212,6 +212,37 @@ f_go_syscc_cfg ()
  egrep -v "Configured[[:space:]]{1,}with:"
 }
 
+f_go_tuple ()
+{
+ local	r
+
+ [ -z "$1" ] &&	{
+	[ -z "$CC" ] && {
+		echo "f_go_tuple: needs CC set if called with null!" 1>&2
+		exit $F_VAR_ERR
+ 	}
+
+	"$CC" -v 2>&1 | grep "^Target:" | awk '{print $NF}'
+	return $?
+ }
+
+ case "$2" in
+	pfx)
+	echo "$1" | awk -F'-' '{print $1}'
+	;;
+
+	sfx)
+	r=$(echo "$1" | awk -F'-' '{print $1}')
+	echo "$1" | sed -e "s,$r-,,"
+	;;
+
+	*)
+	echo "f_go_tuple: [ tuple ] [ pfx | sfx ]!" 1>&2
+	exit $F_VAR_ERR	
+	;;
+ esac
+}
+
 f_go_tmpfs ()
 {
  local	opt="defaults,mode=744,size=""$F_GO_TMPFS"
