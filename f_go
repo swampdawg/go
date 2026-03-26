@@ -122,7 +122,19 @@ f_go_nproc ()
 # reasonable number of build cores..
 f_go_bproc ()
 {
- echo $((`f_go_nproc` -1))
+ local	n i c
+
+ [ -z "$DISTCC_HOSTS" ] && {
+	echo $((`f_go_nproc` -1))
+ } || {
+	n=0
+	for i in $DISTCC_HOSTS 
+	do
+	        c=`echo "$i" | awk -F'/' '{print $NF}'`
+	        n=$(echo "$n + $c" | bc)
+	done
+	echo $n
+ }
 }
 
 # fudge (written in seconds!)..
