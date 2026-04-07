@@ -2,7 +2,7 @@
 
 NAM=`basename "$0"`
 CWD=`pwd`
-GOSUB="/usr/local/sd/syschk/lib"
+: ${GOSUB="/usr/local/sd/syschk/lib"}
 
 . "$GOSUB""/f_go"
 
